@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Localisation sur carte - OSM Côte d'Ivoire</title>
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    #form {
+      padding: 10px;
+      background: #f4f4f4;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    #form input { padding: 6px; width: 130px; }
+    #form button { padding: 6px 14px; cursor: pointer; }
+    #address { font-size: 0.9em; color: #333; margin-left: 8px; }
+    #map { height: calc(100vh - 60px); }
+  </style>
+</head>
+<body>
+
+  <div id="form">
+    <label>Latitude :</label>
+    <input id="lat" type="number" step="any" value="5.3599" />
+    <label>Longitude :</label>
+    <input id="lon" type="number" step="any" value="-4.0083" />
+    <button onclick="placerMarqueur()">Afficher sur la carte</button>
+    <span id="address"></span>
+  </div>
+
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // 1. Initialisation de la carte centrée sur Abidjan
+    const map = L.map('map').setView([5.3599, -4.0083], 11);
+
+    // 2. Fond de carte OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // 3. Variable pour garder le marqueur (afin de le déplacer)
+    let marqueur = null;
+
+    // 4. Fonction principale
+    function placerMarqueur() {
+      const lat = parseFloat(document.getElementById('lat').value);
+      const lon = parseFloat(document.getElementById('lon').value);
+
+      // Vérification basique
+      if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        alert('Coordonnées invalides !');
+        return;
+      }
+
+      // Placer ou déplacer le marqueur
+      if (marqueur) {
+        marqueur.setLatLng([lat, lon]);
+      } else {
+        marqueur = L.marker([lat, lon]).addTo(map);
+      }
+
+      // Popup avec les coordonnées
+      marqueur.bindPopup(`Position : ${lat}, ${lon}`).openPopup();
+
+      // Centrer la carte sur la position
+      map.setView([lat, lon], 15);
+
+      // Bonus : afficher l'adresse via Nominatim (reverse geocoding)
+      reverseGeocode(lat, lon);
+    }
+
+    // 5. Reverse geocoding avec Nominatim (gratuit, OSM)
+    function reverseGeocode(lat, lon) {
+      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
+      fetch(url)
+        .then(res => res.json())
+        .then(data => {
+          const el = document.getElementById('address');
+          el.textContent = data.display_name || 'Adresse inconnue';
+        })
+        .catch(() => {
+          document.getElementById('address').textContent = 'Adresse indisponible';
+        });
+    }
+
+    // 6. Lancer un premier affichage au chargement
+    placerMarqueur();
+  </script>
+</body>
+</html>

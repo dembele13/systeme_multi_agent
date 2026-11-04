@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Espace Livreur - Livraison Abidjan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <!-- Navbar -->
+    <nav class="bg-blue-600 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold">🛵 Tableau de Bord Livreur</h1>
+            <div class="flex items-center gap-4">
+                <span id="nom-livreur" class="text-sm hidden sm:inline"></span>
+                <button onclick="deconnexion()" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm font-semibold transition">Déconnexion</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-4xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <!-- Carte 1 : Statut et zone (position fixe) -->
+        <div class="bg-white p-6 rounded-xl shadow-md">
+            <h2 class="text-lg font-bold text-gray-800 mb-4">📍 Mon Statut & Zone</h2>
+
+            <div class="mb-4 flex items-center justify-between bg-gray-50 p-3 rounded-lg border">
+                <div>
+                    <span class="font-medium text-gray-700">Disponibilité :</span>
+                    <span id="statut-texte" class="ml-1 text-sm font-semibold text-gray-500">...</span>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="en-ligne-toggle" class="sr-only peer" onchange="changerDisponibilite()">
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                </label>
+            </div>
+
+            <div class="space-y-2 text-sm text-gray-600">
+                <p><strong>Commune :</strong> <span id="commune-display">...</span></p>
+                <p><strong>Latitude :</strong> <span id="lat-display">...</span></p>
+                <p><strong>Longitude :</strong> <span id="lon-display">...</span></p>
+            </div>
+            <p class="mt-3 text-xs text-gray-400">Votre position correspond à votre commune de départ et ne change pas.</p>
+            <div id="pos-message" class="mt-3 text-xs text-center font-medium"></div>
+        </div>
+
+        <!-- Carte 2 : Évaluations -->
+        <div class="bg-white p-6 rounded-xl shadow-md">
+            <h2 class="text-lg font-bold text-gray-800 mb-4">⭐ Mes Évaluations</h2>
+
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                <p class="text-sm text-yellow-800 font-medium">Note moyenne</p>
+                <p id="note-moyenne" class="text-4xl font-extrabold text-yellow-600 my-2">- / 5</p>
+                <p id="etoiles" class="text-2xl text-yellow-500 tracking-widest" aria-hidden="true">☆☆☆☆☆</p>
+                <p id="total-eval" class="text-xs text-gray-500 mt-2">Basé sur 0 avis</p>
+            </div>
+
+            <div id="eval-message" class="mt-3 text-xs text-center font-medium"></div>
+
+            <button onclick="chargerEvaluations()" class="mt-4 w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition text-sm">
+                Actualiser mes notes
+            </button>
+        </div>
+
+    </main>
+
+    <script>
+        // --- Authentification -------------------------------------------------
+        const token = localStorage.getItem('token');
+        const livreurId = localStorage.getItem('utilisateur_id');
+
+        if (!token || !token.startsWith('eyJ') || !livreurId) {
+            window.location.href = '/login';
+        }
+
+        const authHeaders = {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+        };
+
+        // --- Utilitaires ------------------------------------------------------
+        function afficherMessage(id, texte, couleur) {
+            const el = document.getElementById(id);
+            el.innerText = texte;
+            el.className = `mt-3 text-xs text-center font-medium text-${couleur}-600`;
+        }
+
+        function majStatutTexte(enLigne) {
+            const el = document.getElementById('statut-texte');
+            el.innerText = enLigne ? 'En ligne' : 'Hors ligne';
+            el.className = 'ml-1 text-sm font-semibold ' + (enLigne ? 'text-green-600' : 'text-gray-500');
+        }
+
+        function genererEtoiles(note) {
+            const pleines = Math.round(note);
+            return '★'.repeat(pleines) + '☆'.repeat(5 - pleines);
+        }
+
+        // --- Profil (commune, coordonnées fixes, statut) ----------------------
+        async function chargerProfil() {
+            try {
+                const r = await fetch(`/livreurs/${livreurId}/profil`, { headers: authHeaders });
+                if (r.status === 401) return deconnexion();
+                const p = await r.json();
+                if (!r.ok) {
+                    return afficherMessage('pos-message', p.detail || "Erreur de chargement du profil", 'red');
+                }
+
+                document.getElementById('commune-display').innerText = p.commune ?? 'Non définie';
+                document.getElementById('lat-display').innerText = p.lat != null ? Number(p.lat).toFixed(4) : 'Non définie';
+                document.getElementById('lon-display').innerText = p.lon != null ? Number(p.lon).toFixed(4) : 'Non définie';
+                document.getElementById('en-ligne-toggle').checked = !!p.en_ligne;
+                majStatutTexte(!!p.en_ligne);
+
+                const nom = localStorage.getItem('nom');
+                if (nom) document.getElementById('nom-livreur').innerText = nom;
+            } catch (e) {
+                afficherMessage('pos-message', "Impossible de joindre le serveur.", 'red');
+            }
+        }
+
+        // --- Disponibilité (la position ne change jamais) ---------------------
+        async function changerDisponibilite() {
+            const toggle = document.getElementById('en-ligne-toggle');
+            const enLigne = toggle.checked;
+            toggle.disabled = true;
+            try {
+                const r = await fetch(`/livreurs/${livreurId}/disponibilite`, {
+                    method: 'PATCH',
+                    headers: authHeaders,
+                    body: JSON.stringify({ en_ligne: enLigne })
+                });
+                if (r.status === 401) return deconnexion();
+                if (r.ok) {
+                    majStatutTexte(enLigne);
+                    afficherMessage('pos-message', enLigne ? "Vous êtes en ligne." : "Vous êtes hors ligne.", 'green');
+                } else {
+                    toggle.checked = !enLigne;
+                    afficherMessage('pos-message', "Erreur de mise à jour.", 'red');
+                }
+            } catch (e) {
+                toggle.checked = !enLigne;
+                afficherMessage('pos-message', "Impossible de joindre le serveur.", 'red');
+            } finally {
+                toggle.disabled = false;
+            }
+        }
+
+        // --- Évaluations ------------------------------------------------------
+        async function chargerEvaluations() {
+            try {
+                const r = await fetch(`/livreurs/${livreurId}/evaluation`, { headers: authHeaders });
+                if (r.status === 401) return deconnexion();
+                const data = await r.json();
+
+                if (!r.ok) {
+                    return afficherMessage('eval-message', data.detail || "Erreur de chargement des notes", 'red');
+                }
+
+                const note = Number(data.note_moyenne ?? 0);
+                const nombre = Number(data.nombre_evaluations ?? 0);
+
+                document.getElementById('note-moyenne').innerText =
+                    nombre > 0 ? `${note.toFixed(1)} / 5` : '- / 5';
+                document.getElementById('etoiles').innerText = genererEtoiles(note);
+                document.getElementById('total-eval').innerText = `Basé sur ${nombre} avis`;
+                document.getElementById('eval-message').innerText =
+                    nombre === 0 ? "Aucune évaluation pour le moment." : "";
+            } catch (e) {
+                afficherMessage('eval-message', "Impossible de joindre le serveur.", 'red');
+            }
+        }
+
+        // --- Déconnexion ------------------------------------------------------
+        function deconnexion() {
+            localStorage.clear();
+            window.location.href = '/login';
+        }
+
+        // --- Démarrage --------------------------------------------------------
+        window.onload = () => {
+            chargerProfil();
+            chargerEvaluations();
+        };
+    </script>
+</body>
+</html>
